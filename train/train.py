@@ -24,7 +24,7 @@ import libs.preprocessings.coco_v1 as coco_preprocess
 import libs.nets.pyramid_network as pyramid_network
 import libs.nets.resnet_v1 as resnet_v1
 
-from libs.logs.log import LOG
+from libs.logs.log import get_logger
 from train.train_utils import _configure_learning_rate, _configure_optimizer, \
   _get_variables_to_train, _get_init_fn, get_var_list_to_restore
 
@@ -282,6 +282,7 @@ def train():
     ## finalize the graph for checking memory leak
     sess.graph.finalize()
 
+    logger = get_logger()
     ## main loop
     for step in range(FLAGS.max_iters):
         
@@ -301,8 +302,9 @@ def train():
                               [training_rcnn_rois] + [training_rcnn_clses] + [training_rcnn_clses_target] + [training_rcnn_scores] + [training_mask_rois] + [training_mask_clses_target] + [training_mask_final_mask] + [training_mask_final_mask_target])
 
         duration_time = time.time() - start_time
-        if step % 1 == 0: 
-            LOG ( """iter %d: image-id:%07d, time:%.3f(sec), regular_loss: %.6f, """
+
+        if step % 20 == 0: 
+            logger.info( """iter %d: image-id:%07d, time:%.3f(sec), regular_loss: %.6f, """
                     """total-loss %.4f(%.4f, %.4f, %.6f, %.4f, %.4f), """
                     """instances: %d, """
                     """batch:(%d|%d, %d|%d, %d|%d)""" 
@@ -311,14 +313,14 @@ def train():
                       gt_boxesnp.shape[0], 
                       rpn_batch_pos, rpn_batch, rcnn_batch_pos, rcnn_batch, mask_batch_pos, mask_batch))
 
-            LOG ("target")
-            LOG (cat_id_to_cls_name(np.unique(np.argmax(np.asarray(training_rcnn_clses_targetnp),axis=1))))
-            LOG ("predict")
-            LOG (cat_id_to_cls_name(np.unique(np.argmax(np.array(training_rcnn_clsesnp),axis=1))))
-            LOG (tmp_0np)
-            LOG (tmp_1np)
-            LOG (tmp_2np)
-            LOG (tmp_3np)
+            logger.info ("target")
+            logger.info (cat_id_to_cls_name(np.unique(np.argmax(np.asarray(training_rcnn_clses_targetnp),axis=1))))
+            logger.info ("predict")
+            logger.info (cat_id_to_cls_name(np.unique(np.argmax(np.array(training_rcnn_clsesnp),axis=1))))
+            logger.info (tmp_0np)
+            logger.info (tmp_1np)
+            logger.info (tmp_2np)
+            logger.info (tmp_3np)
 
         if step % 50 == 0: 
             draw_bbox(step, 
@@ -346,7 +348,7 @@ def train():
                       vis_all=True)
             
             if np.isnan(tot_loss) or np.isinf(tot_loss):
-                LOG (gt_boxesnp)
+                logger.info (gt_boxesnp)
                 raise
           
         if step % 100 == 0:
@@ -366,4 +368,5 @@ def train():
 
 
 if __name__ == '__main__':
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     train()
