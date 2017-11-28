@@ -129,6 +129,26 @@ def _smallest_size_at_least(height, width, smallest_side):
                   lambda: smallest_side / height)
   new_height = tf.to_int32(height * scale)
   new_width = tf.to_int32(width * scale)
+
+  ##always memory error, 
+  def _limit_biggest_side(height, width, biggest_side, bigger_side):
+    scale = biggest_side / bigger_side
+    new_height = tf.to_int32(tf.to_float(height) * scale)
+    new_width = tf.to_int32(tf.to_float(width) * scale)
+    return new_height, new_width
+
+  def _not_change(new_height,new_width):
+    return new_height,new_width
+
+  biggest_side = tf.to_float(2000)
+  bigger_side = tf.to_float(tf.cond(tf.greater(new_height, new_width),
+          lambda: new_height,
+          lambda: new_width))
+  new_height,new_width= tf.cond(tf.greater(bigger_side, biggest_side),
+      lambda: _limit_biggest_side(new_height,new_width,biggest_side,bigger_side),
+      lambda: _not_change(new_height,new_width))
+
+    
   return new_height, new_width
 
 def _aspect_preserving_resize(image, label, smallest_side):
