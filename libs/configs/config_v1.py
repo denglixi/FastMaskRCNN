@@ -198,6 +198,9 @@ tf.app.flags.DEFINE_integer(
     'image_min_size', 640,
     'resize image so that the min edge equals to image_min_size')
 
+tf.app.flags.DEFINE_integer(
+    'image_max_size', 2000,
+    'resize image so that the max edge equals to image_max_size. priority is higher than image_min_size')
 #####################
 # Fine-Tuning Flags #
 #####################

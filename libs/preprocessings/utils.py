@@ -117,7 +117,7 @@ def _central_crop(image_list, label_list, crop_height, crop_width):
   return output_images, output_labels
 
 
-def _smallest_size_at_least(height, width, smallest_side):
+def _smallest_size_at_least(height, width, smallest_side, biggest_side):
   smallest_side = tf.convert_to_tensor(smallest_side, dtype=tf.int32)
 
   height = tf.to_float(height)
@@ -140,7 +140,7 @@ def _smallest_size_at_least(height, width, smallest_side):
   def _not_change(new_height,new_width):
     return new_height,new_width
 
-  biggest_side = tf.to_float(2000)
+  biggest_side = tf.to_float(biggest_side)
   bigger_side = tf.to_float(tf.cond(tf.greater(new_height, new_width),
           lambda: new_height,
           lambda: new_width))
