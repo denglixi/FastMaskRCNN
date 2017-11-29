@@ -156,15 +156,22 @@ def gen_all_anchors(height, width, stride, scales, scope='GenAnchors'):
     return all_anchors
 
 def assign_boxes(gt_boxes, tensors, layers, scope='AssignGTBoxes'):
+    '''
+    assign tensor in tensors(a iterable type) with size of gt_boxes following the formulation that k = [k0 + log_2(sqrt(area)/224)] that 224 is the standard input of imagenet
+    gt_boxes is same size with tensor in tensors. In fact ,they sametime should be same thing
+    '''
     with tf.name_scope(scope) as sc:
         min_k = layers[0]
         max_k = layers[-1]
+        #index of gt to layers
         assigned_layers = \
             tf.py_func(assign.assign_boxes, 
                      [ gt_boxes, min_k, max_k ],
                      tf.int32)
         assigned_layers = tf.reshape(assigned_layers, [-1])
 
+        #base assigned_layers to assign tensors
+        
         assigned_tensors = []
         for t in tensors:
             split_tensors = []

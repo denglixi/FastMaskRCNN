@@ -52,6 +52,7 @@ def sample_rpn_outputs(boxes, scores, is_training=False, only_positive=False, wi
     boxes = boxes[keeps, :]
     scores = scores[keeps]
   else:
+    ## get top k(per_nms_top_n) scores 
     if len(scores) > pre_nms_top_n:
       partial_order = scores.ravel()
       partial_order = np.argpartition(-partial_order, pre_nms_top_n)[:pre_nms_top_n]
@@ -115,7 +116,8 @@ def sample_rpn_outputs_wrt_gt_boxes(boxes, scores, gt_boxes, is_training=False, 
         ## rcnn foreground bbox with high overlap
         fg_inds = np.where(max_overlaps >= cfg.FLAGS.fg_threshold)[0]
         ## rcnn foreground bbox with highest overlap area on gt
-        gt_argmax_overlaps = overlaps.argmax(axis=0) # G
+        ## to avoid fg_inds is empty?
+        gt_argmax_overlaps = np.array([int(overlaps.argmax() / overlaps.shape[1])])# G
 
         fg_inds = np.union1d(gt_argmax_overlaps, fg_inds)
 
@@ -354,11 +356,13 @@ if __name__ == '__main__':
     s = boxes + s
     boxes = np.hstack((boxes, s))
     
+    gt = np.array([[10,10,35,35],[25,25,50,50]])
     scores = np.random.rand(N, 1)
     # scores_ = 1 - np.random.rand(N, 1)
     # scores = np.hstack((scores, scores_))
   
-    boxes, scores, batch_inds = sample_rpn_outputs(boxes, scores, only_positive=False)
+    #boxes, scores, batch_inds = sample_rpn_outputs(boxes, scores, only_positive=False)
+    boxes, scores, batch_inds = sample_rpn_outputs_wrt_gt_boxes(boxes, scores, gt,only_positive=False)
 
 
   

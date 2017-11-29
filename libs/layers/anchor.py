@@ -123,7 +123,7 @@ def decode(boxes, scores, all_anchors, image_height, image_width):
 
     boxes = bbox_transform_inv(all_anchors, boxes)
     boxes = clip_boxes(boxes, (image_height, image_width))
-    classes = np.argmax(scores, axis=1).astype(np.int32)
+    classes = np.argmax(scores, axis=1).astype(np.int32) #get the class with high score for each bbox TODO:what's this?
     scores = scores[:, 1]
     
     return boxes, classes, scores
@@ -202,6 +202,8 @@ if __name__ == '__main__':
         rois = np.concatenate((rois, s), axis=1)
         indexs = np.arange(N)
 
+        import pdb
+        pdb.set_trace()
         all_anchors = anchors_plane(200, 300, stride = 4, scales=[2, 4, 8, 16, 32], ratios=[0.5, 1, 2.0], base=16)
         labels, bbox_targets, bbox_inside_weights = encode(gt_boxes, all_anchors=all_anchors, height=200, width=300, stride=4, indexs=indexs)
 
