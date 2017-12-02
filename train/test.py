@@ -52,13 +52,12 @@ def _writeJSON(_dict):
     with open(FLAGS.train_dir + 'results.json', 'a+') as f:
         f.seek(0,2)              #Go to the end of file    
         if f.tell() == 0 :       #Check if file is empty
-            json.dump([_dict], f)  #If empty, write an array
+            json.dump(_dict, f)  #If empty, write an array
         else :
-            f.seek(-1,2)           
-            f.truncate()           #Remove the last character, open the array
+            f.seek(0,2)           
             f.write(' , ')         #Write the separator
             json.dump(_dict,f)     #Dump the dictionary
-            f.write(']')           #Close the array
+            #f.write(']')           #Close the array
         f.close()
         return
 
@@ -87,6 +86,7 @@ def _convertMasks(image_id, masks, classes, boxes, image_height, image_width):
         size = (image_height, image_width)
         original_image_mask = np.zeros(size, np.uint8)
         #fit mask to box
+        #TODO: error when box_width and box_height is 0
         mask = cv2.resize(mask[cls], (box_width, box_height))
         #place box on blank image
         y1 = int(box_offset_y)
@@ -95,6 +95,8 @@ def _convertMasks(image_id, masks, classes, boxes, image_height, image_width):
         x2 = int(box_offset_x + mask.shape[1])
         original_image_mask[y1:y2, x1:x2] = mask*255
         #threshold by 0.5
+        #TODO: what's this?
+
         original_image_mask = (original_image_mask >= 127) * 255
         original_image_masks.append(original_image_mask)
 
@@ -103,9 +105,9 @@ def _convertMasks(image_id, masks, classes, boxes, image_height, image_width):
 def _collectData(image_id, classes, boxes, probs, original_image_height, original_image_width, image_height, image_width, masks=None):
     instance_num = probs.shape[0]
     original_image_boxes = _convertBoxes(image_id, boxes, original_image_height, original_image_width, image_height, image_width)
+    masks = None
     if masks is not None:
         original_image_masks = _convertMasks(image_id, masks, classes, original_image_boxes, original_image_height, original_image_width)
-
     image_ids = [image_id] * instance_num
     real_category_id = _cat_id_to_real_id(classes).tolist()
     original_image_boxes = original_image_boxes.tolist()#change format
@@ -119,6 +121,7 @@ def _collectData(image_id, classes, boxes, probs, original_image_height, origina
         if masks is not None:
             RLE = np.array(original_image_masks[instance_index], order='F', dtype= np.uint8)
             RLE = pycoco_mask.encode(RLE)
+            RLE['counts'] = RLE['counts'].decode('utf-8')
             instance['segmentation'] = RLE
         instance['score'] = score[instance_index][classes[instance_index]]
         _writeJSON(instance)
@@ -193,8 +196,20 @@ def test():
 
     ## main loop
     # for step in range(FLAGS.max_iters):
+
+    #debug  pass first 
+    #for jump_img_num in range(4547):
+    #    img_id_str = sess.run([image_id])
+    #    if jump_img_num % 100 == 0:
+    #        print(jump_img_num)
+    #        print(img_id_str)
+
+
     for step in range(82783):#range(40503):
         
+        # jump first N image
+        
+
         start_time = time.time()
 
         image_id_str, original_image_heightnp, original_image_widthnp, image_heightnp, image_widthnp, \
@@ -214,22 +229,22 @@ def test():
                    % (step, image_id_str, duration_time, 
                       gt_boxesnp.shape[0]))
 
-        if step % 1 == 0: 
-            draw_bbox(step, 
-                      np.uint8((np.array(input_imagenp[0])/2.0+0.5)*255.0), 
-                      name='test_est', 
-                      bbox=testing_mask_roisnp, 
-                      label=testing_mask_final_clsesnp, 
-                      prob=testing_mask_final_scoresnp,
-                      mask=testing_mask_final_masknp,
-                      vis_th=0.5)
+        if step % 20 == 0: 
+            #draw_bbox(step, 
+            #          np.uint8((np.array(input_imagenp[0])/2.0+0.5)*255.0), 
+            #          name='test_est', 
+            #          bbox=testing_mask_roisnp, 
+            #          label=testing_mask_final_clsesnp, 
+            #          prob=testing_mask_final_scoresnp,
+            #          mask=testing_mask_final_masknp,
+            #          vis_th=0.5)
 
-            draw_bbox(step, 
-                      np.uint8((np.array(input_imagenp[0])/2.0+0.5)*255.0), 
-                      name='test_gt', 
-                      bbox=gt_boxesnp[:,0:4], 
-                      label=gt_boxesnp[:,4].astype(np.int32), 
-                      prob=np.ones((gt_boxesnp.shape[0],81), dtype=np.float32),)
+            #draw_bbox(step, 
+            #          np.uint8((np.array(input_imagenp[0])/2.0+0.5)*255.0), 
+            #          name='test_gt', 
+            #          bbox=gt_boxesnp[:,0:4], 
+            #          label=gt_boxesnp[:,4].astype(np.int32), 
+            #          prob=np.ones((gt_boxesnp.shape[0],81), dtype=np.float32),)
 
             print ("predict")
             # LOG (cat_id_to_cls_name(np.unique(np.argmax(np.array(training_rcnn_clsesnp),axis=1))))
@@ -239,4 +254,5 @@ def test():
         _collectData(image_id_str, testing_mask_final_clsesnp, testing_mask_roisnp, testing_mask_final_scoresnp, original_image_heightnp, original_image_widthnp, image_heightnp, image_widthnp, testing_mask_final_masknp)
 
 if __name__ == '__main__':
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'    
     test()
