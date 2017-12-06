@@ -14,6 +14,7 @@ def anchors_plane(height, width, stride = 1.0,
   """Get a complete set of anchors in a spatial plane,
   height, width are plane dimensions
   stride is scale ratio of
+  base is multiple number of the origin image to plane
   """
   # TODO: implement in C, or pre-compute them, or set to a fixed input-shape
   # enum all anchors in a plane
@@ -126,21 +127,24 @@ if __name__ == '__main__':
   a = anchors()
   num_anchors = 0
 
-  # all_anchors = anchors_plane(200, 250, stride=4, boarder=0)
-  # num_anchors += all_anchors.shape[0]
-  for i in range(10):
-    ancs = anchors()
-    all_anchors = cython_anchor.anchors_plane(200, 250, 4, ancs)
-    num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
-    all_anchors = cython_anchor.anchors_plane(100, 125, 8, ancs)
-    num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
-    all_anchors = cython_anchor.anchors_plane(50, 63, 16, ancs)
-    num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
-    all_anchors = cython_anchor.anchors_plane(25, 32, 32, ancs)
-    num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
-  print('average time: %f' % ((time.time() - t) / 10))
-  print('anchors: %d' % (num_anchors / 10))
-  print(a.shape, '\n', a)
-  print (all_anchors.shape)
+  all_anchors = anchors_plane(1, 1, stride=1,base=1)
+  num_anchors += all_anchors.shape[0]
+  print("anchors:")
+  print(all_anchors)
+  print("number of anchors:",num_anchors)
+  #for i in range(10):
+  #  ancs = anchors()
+  #  all_anchors = cython_anchor.anchors_plane(200, 250, 4, ancs)
+  #  num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
+  #  all_anchors = cython_anchor.anchors_plane(100, 125, 8, ancs)
+  #  num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
+  #  all_anchors = cython_anchor.anchors_plane(50, 63, 16, ancs)
+  #  num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
+  #  all_anchors = cython_anchor.anchors_plane(25, 32, 32, ancs)
+  #  num_anchors += all_anchors.shape[0] * all_anchors.shape[1] * all_anchors.shape[2]
+  #print('average time: %f' % ((time.time() - t) / 10))
+  #print('anchors: %d' % (num_anchors / 10))
+  #print(a.shape, '\n', a)
+  #print (all_anchors.shape)
   # from IPython import embed
   # embed()

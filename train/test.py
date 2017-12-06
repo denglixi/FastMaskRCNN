@@ -162,7 +162,7 @@ def test():
             weight_decay=0.0, batch_norm_decay=0.0, is_training=True)
     outputs = pyramid_network.build(end_points, im_shape[1], im_shape[2], pyramid_map,
             num_classes=81,
-            base_anchors=3,
+            base_anchors=9,
             is_training=False,
             gt_boxes=None, gt_masks=None, loss_weights=[0.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -254,5 +254,5 @@ def test():
         _collectData(image_id_str, testing_mask_final_clsesnp, testing_mask_roisnp, testing_mask_final_scoresnp, original_image_heightnp, original_image_widthnp, image_heightnp, image_widthnp, testing_mask_final_masknp)
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'    
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     test()

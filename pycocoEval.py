@@ -12,9 +12,9 @@ import json
 pylab.rcParams['figure.figsize'] = (10.0, 8.0)
 
 annType = ['segm','bbox','keypoints']
-annType = annType[0]      #specify type here
+annType = annType[1]      #specify type here
 prefix = 'person_keypoints' if annType=='keypoints' else 'instances'
-print 'Running demo for *%s* results.'%(annType)
+print('Running demo for *%s* results.'%(annType))
 
 #initialize COCO ground truth api
 dataDir='data/coco/'

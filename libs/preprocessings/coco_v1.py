@@ -75,7 +75,7 @@ def preprocess_for_test(image, gt_boxes, gt_masks):
     ih, iw = tf.shape(image)[0], tf.shape(image)[1]
 
     ## min size resizing
-    new_ih, new_iw = preprocess_utils._smallest_size_at_least(ih, iw, cfg.FLAGS.image_min_size)
+    new_ih, new_iw = preprocess_utils._smallest_size_at_least(ih, iw, cfg.FLAGS.image_min_size, cfg.FLAGS.image_max_size)
     image = tf.expand_dims(image, 0)
     image = tf.image.resize_bilinear(image, [new_ih, new_iw], align_corners=False)
     image = tf.squeeze(image, axis=[0])

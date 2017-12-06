@@ -214,10 +214,10 @@ def train():
             weight_decay=FLAGS.weight_decay, batch_norm_decay=FLAGS.batch_norm_decay, is_training=True)
     outputs = pyramid_network.build(end_points, image_height, image_width, pyramid_map,
             num_classes=81,
-            base_anchors=3,#9#15
+            base_anchors=9,#15
             is_training=True,
             gt_boxes=gt_boxes, gt_masks=gt_masks,
-            loss_weights=[1.0, 1.0, 10.0, 1.0, 10.0])
+            loss_weights=[1.0, 1.0, 1.0, 10.0, 1.0])
             # loss_weights=[10.0, 1.0, 0.0, 0.0, 0.0])
             # loss_weights=[100.0, 100.0, 1000.0, 10.0, 100.0])
             # loss_weights=[0.2, 0.2, 1.0, 0.2, 1.0])
@@ -249,9 +249,9 @@ def train():
     cropped_rois = tf.get_collection('__CROPPED__')[0]
     transposed = tf.get_collection('__TRANSPOSED__')[0]
     
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.95)
-    #gpu_options = tf.GPUOptions(allow_growth=True)
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+    #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
+    gpu_options = tf.GPUOptions(allow_growth=True)
+    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))#,intra_op_parallelism_threads=1,inter_op_parallelism_threads=1))
     #sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
     init_op = tf.group(
             tf.global_variables_initializer(),
@@ -284,6 +284,7 @@ def train():
 
     logger = get_logger()
     ## main loop
+
     for step in range(FLAGS.max_iters):
         
         start_time = time.time()
@@ -317,6 +318,8 @@ def train():
             logger.info (cat_id_to_cls_name(np.unique(np.argmax(np.asarray(training_rcnn_clses_targetnp),axis=1))))
             logger.info ("predict")
             logger.info (cat_id_to_cls_name(np.unique(np.argmax(np.array(training_rcnn_clsesnp),axis=1))))
+            logger.info ("input image shape")
+            logger.info (input_imagenp.shape)
             logger.info (tmp_0np)
             logger.info (tmp_1np)
             logger.info (tmp_2np)

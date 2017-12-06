@@ -244,9 +244,9 @@ def build_heads(pyramid, py_scope, slim_scope, image_height, image_width, num_cl
           cls = slim.conv2d(rpn, base_anchors * 2, [1, 1], stride=1, scope='pyramid/%s/rpn/cls' % p, \
                   weights_initializer=tf.truncated_normal_initializer(stddev=0.01), activation_fn=None, normalizer_fn=None)
 
-          anchor_scales = [8]#[2 **(i-2), 2 ** (i-1), 2 **(i)]
-          print("anchor_scales = " , anchor_scales)
-          all_anchors = gen_all_anchors(height, width, stride, anchor_scales)
+          anchor_scales = [2 **(i-2), 2 ** (i-1), 2 **(i)] #[8]
+          print("{}anchor_scales = ".format(p) , anchor_scales)
+          all_anchors = gen_all_anchors(height, width, stride, anchor_scales) #3  dimension list w*h*[anchors]
           outputs['rpn'][p]={'box':box, 'cls':cls, 'anchor':all_anchors, 'shape':shape}
 
         ### gather boxes, clses, anchors from all pyramid layers
@@ -286,7 +286,7 @@ def build_heads(pyramid, py_scope, slim_scope, image_height, image_width, num_cl
         rcnn_ordered_rois = []
         for i in range(5, 1, -1):
             p = 'P%d'%i
-            rcnn_splitted_roi = rcnn_assigned_rois[i-2]
+            rcnn_splitted_roi = rcnn_assigned_rois[i-2] 
             rcnn_batch_ind = rcnn_assigned_batch_inds[i-2]
             rcnn_cropped_feature, rcnn_rois_to_crop_and_resize = ROIAlign(pyramid[p], rcnn_splitted_roi, rcnn_batch_ind, image_height, image_width, stride=2**i,
                                pooled_height=14, pooled_width=14)
@@ -450,7 +450,8 @@ def build_losses(pyramid, py_scope, slim_scope, image_height, image_width, outpu
             shape = tf.shape(pyramid[p])
             height, width = shape[1], shape[2]
 
-            splitted_gt_boxes = assigned_gt_boxes[i-2]
+            #TODO: we need a much better way to assign boxes
+            splitted_gt_boxes = gt_boxes#assigned_gt_boxes[i-2]
             
             ### rpn losses
             # 1. encode ground truth
@@ -458,6 +459,9 @@ def build_losses(pyramid, py_scope, slim_scope, image_height, image_width, outpu
             all_anchors = outputs['rpn'][p]['anchor']
             rpn_boxes = outputs['rpn'][p]['box']
             rpn_clses = tf.reshape(outputs['rpn'][p]['cls'], (1, height, width, base_anchors, 2))
+
+            #splitted_gt_boxes = tf.Print(splitted_gt_boxes,[splitted_gt_boxes.shape[0]],'P%d split gt boxes number' % i)
+            #splitted_gt_boxes = tf.Print(splitted_gt_boxes,[splitted_gt_boxes.shape[0]],'P%d split gt boxes number' % i)
 
             rpn_clses_target, rpn_boxes_target, rpn_boxes_inside_weight = \
                     anchor_encoder(splitted_gt_boxes, all_anchors, height, width, stride, image_height, image_width, scope='AnchorEncoder')
@@ -484,6 +488,7 @@ def build_losses(pyramid, py_scope, slim_scope, image_height, image_width, outpu
             rpn_box_loss = tf.reshape(rpn_box_loss, [-1, 4])
             rpn_box_loss = tf.reduce_sum(rpn_box_loss, axis=1)
             rpn_box_loss = rpn_box_lw * tf.reduce_mean(rpn_box_loss) 
+            tf.summary.scalar('rpn_box_loss',rpn_box_loss)
             tf.add_to_collection(tf.GraphKeys.LOSSES, rpn_box_loss)
             rpn_box_losses.append(rpn_box_loss)
 
@@ -494,6 +499,7 @@ def build_losses(pyramid, py_scope, slim_scope, image_height, image_width, outpu
             rpn_clses_target = slim.one_hot_encoding(rpn_clses_target, 2, on_value=1.0, off_value=0.0) # this will set -1 label to all zeros
             rpn_cls_loss = rpn_cls_lw * tf.nn.softmax_cross_entropy_with_logits(labels=rpn_clses_target, logits=rpn_clses) 
             rpn_cls_loss = tf.reduce_mean(rpn_cls_loss) 
+            tf.summary.scalar('rpn_cls_loss',rpn_cls_loss)
             tf.add_to_collection(tf.GraphKeys.LOSSES, rpn_cls_loss)
             rpn_cls_losses.append(rpn_cls_loss)
 
@@ -532,12 +538,14 @@ def build_losses(pyramid, py_scope, slim_scope, image_height, image_width, outpu
         rcnn_box_loss = tf.reshape(rcnn_box_loss, [-1, 4])
         rcnn_box_loss = tf.reduce_sum(rcnn_box_loss, axis=1)
         rcnn_box_loss = rcnn_box_lw * tf.reduce_mean(rcnn_box_loss) # * frac_
+        tf.summary.scalar('rcnn_box_loss',rcnn_box_loss)
         tf.add_to_collection(tf.GraphKeys.LOSSES, rcnn_box_loss)
         rcnn_box_losses.append(rcnn_box_loss)
 
         rcnn_clses_target = slim.one_hot_encoding(rcnn_clses_target, num_classes, on_value=1.0, off_value=0.0)
         rcnn_cls_loss = rcnn_cls_lw * tf.nn.softmax_cross_entropy_with_logits(labels=rcnn_clses_target, logits=rcnn_clses) 
         rcnn_cls_loss = tf.reduce_mean(rcnn_cls_loss) # * frac_
+        tf.summary.scalar('rcnn_cls_loss',rcnn_cls_loss)
         tf.add_to_collection(tf.GraphKeys.LOSSES, rcnn_cls_loss)
         rcnn_cls_losses.append(rcnn_cls_loss)
 
@@ -576,6 +584,7 @@ def build_losses(pyramid, py_scope, slim_scope, image_height, image_width, outpu
         mask_loss = mask_lw * mask_loss
         mask_loss = tf.reduce_mean(mask_loss) 
         mask_loss = tf.cond(tf.greater(tf.size(mask_clses_target), 0), lambda: mask_loss, lambda: tf.constant(0.0))
+        tf.summary.scalar('mask_loss',mask_loss)
         tf.add_to_collection(tf.GraphKeys.LOSSES, mask_loss)
         mask_losses.append(mask_loss)
 
@@ -613,7 +622,7 @@ def build(end_points, image_height, image_width, pyramid_map,
         is_training,
         gt_boxes=None,
         gt_masks=None, 
-        loss_weights=[0.1, 0.1, 1.0, 0.1, 1.0]):
+        loss_weights=[0.1, 0.1, 0.1, 1.0, 0.1]):
     
     pyramid, py_scope, slim_scope = build_pyramid(pyramid_map, end_points, is_training=is_training)
 

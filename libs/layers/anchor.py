@@ -13,6 +13,12 @@ from libs.logs.log import LOG
 
 _DEBUG = False
 
+def cal_area(boxes):
+    if len(boxes) <= 0:
+        return 0,0
+    area =(boxes[:,2] - boxes[:,0]) * (boxes[:,3] - boxes[:,1])
+    return area.max(),area.min()
+
 def encode(gt_boxes, all_anchors, feature_height, feature_width, stride, image_height, image_width, ignore_cross_boundary=True):
     """Matching and Encoding groundtruth into learning targets
     Sampling
@@ -33,9 +39,13 @@ def encode(gt_boxes, all_anchors, feature_height, feature_width, stride, image_h
     bbox_inside_weights: N x (4), in {0, 1} indicating to which class is assigned.
     """
     # TODO: speedup this module
+
     allow_border = cfg.FLAGS.allow_border
     all_anchors = all_anchors.reshape([-1, 4])
     total_anchors = all_anchors.shape[0]
+
+    #anchor_areas = cal_area(all_anchors)
+    #gt_areas = cal_area(gt_boxes)
 
     labels = np.empty((total_anchors, ), dtype=np.int32)
     labels.fill(-1)
@@ -59,15 +69,18 @@ def encode(gt_boxes, all_anchors, feature_height, feature_width, stride, image_h
         # fg label: above threshold IOU 
         labels[max_overlaps >= cfg.FLAGS.rpn_fg_threshold] = 1
 
+        mild_hard_example_inds = np.where(max_overlaps < 0.1)[0]
+
         # ignore cross-boundary anchors
         if ignore_cross_boundary is True:
             cb_inds = _get_cross_boundary(all_anchors, image_height, image_width, allow_border)
             labels[cb_inds] = -1
 
-        # this is sentive to boxes of little overlaps, use with caution!
-        gt_argmax_overlaps = np.where(overlaps == gt_max_overlaps)[0]
-        # fg label: for each gt, hard-assign anchor with highest overlap despite its overlaps
-        labels[gt_argmax_overlaps] = 1
+        # this seems to be error !!!!
+        ## this is sentive to boxes of little overlaps, use with caution!
+        #gt_argmax_overlaps = np.where(overlaps == gt_max_overlaps)[0]
+        ## fg label: for each gt, hard-assign anchor with highest overlap despite its overlaps
+        #labels[gt_argmax_overlaps] = 1
 
         # subsample positive labels if there are too many
         num_fg = int(cfg.FLAGS.fg_rpn_fraction * cfg.FLAGS.rpn_batch_size)
@@ -78,15 +91,33 @@ def encode(gt_boxes, all_anchors, feature_height, feature_width, stride, image_h
     else:
         # if there is no gt
         labels[:] = 0
+        mild_hard_example_inds = np.array([])
 
     # TODO: mild hard negative mining
     # subsample negative labels if there are too many
     num_fg = np.sum(labels == 1)
     num_bg = max(min(cfg.FLAGS.rpn_batch_size - num_fg, num_fg * 3), 8)
     bg_inds = np.where(labels == 0)[0]
+    #print('--------------')
+    #print('num_fg:',num_fg)
+    #print('num_bg:',num_bg)
+    #print("anchor_areas",anchor_areas)
+    #print("gt_areas",gt_areas)
+    #print('len bg_indes',len(bg_inds))
+    #print('len mild_hard_example_inds',len(mild_hard_example_inds))
     if len(bg_inds) > num_bg:
-        disable_inds = np.random.choice(bg_inds, size=(len(bg_inds) - num_bg), replace=False)
-        labels[disable_inds] = -1
+        if len(mild_hard_example_inds) >= num_bg:
+            #only choice in mild_hard_example_inds
+            labels[bg_inds] = -1
+            enable_inds = np.random.choice(mild_hard_example_inds, size=(num_bg), replace=False)
+            #print("ensable_inds",len(enable_inds))
+            labels[enable_inds] = 0
+        else:
+            disable_num = len(bg_inds) - len(mild_hard_example_inds) - num_bg
+            not_hard_bg_inds = np.setdiff1d(bg_inds,mild_hard_example_inds)
+            disable_inds = np.random.choice(not_hard_bg_inds, size=disable_num, replace=False)
+            #print("disable_inds",len(disable_inds))
+            labels[disable_inds] = -1
 
     bbox_targets = np.zeros((total_anchors, 4), dtype=np.float32)
     if gt_boxes.size > 0:
@@ -123,7 +154,7 @@ def decode(boxes, scores, all_anchors, image_height, image_width):
 
     boxes = bbox_transform_inv(all_anchors, boxes)
     boxes = clip_boxes(boxes, (image_height, image_width))
-    classes = np.argmax(scores, axis=1).astype(np.int32) #get the class with high score for each bbox TODO:what's this?
+    classes = np.argmax(scores, axis=1).astype(np.int32) #get the class with high score for each bbox TODO:what's this? It seems nothing working with this
     scores = scores[:, 1]
     
     return boxes, classes, scores
