@@ -30,14 +30,14 @@ def get_network(name, image, weight_decay=0.000005, batch_norm_decay=0.997, is_t
     if name == 'resnet50':
         # with slim.arg_scope(resnet_v1.resnet_arg_scope(weight_decay=weight_decay)):
         #     logits, end_points = resnet50(image, 1000, is_training=is_training)
-        with slim.arg_scope(resnet_v1.resnet_arg_scope(is_training=is_training, weight_decay=weight_decay, batch_norm_decay=batch_norm_decay)):
-            logits, end_points = resnet50(image)
+        with slim.arg_scope(resnet_v1.resnet_arg_scope( weight_decay=weight_decay, batch_norm_decay=batch_norm_decay)):
+            logits, end_points = resnet50(image,is_training=is_training)
     
     if name == 'resnet101':
         # with slim.arg_scope(resnet_v1.resnet_arg_scope(weight_decay=weight_decay)):
         #     logits, end_points = resnet101(image, 1000, is_training=is_training)
-        with slim.arg_scope(resnet_v1.resnet_arg_scope(is_training=is_training, weight_decay=weight_decay, batch_norm_decay=batch_norm_decay)):
-            logits, end_points = resnet101(image)
+        with slim.arg_scope(resnet_v1.resnet_arg_scope(weight_decay=weight_decay, batch_norm_decay=batch_norm_decay)):
+            logits, end_points = resnet101(image,is_training=is_training)
 
     if name == 'resnext50':
         name

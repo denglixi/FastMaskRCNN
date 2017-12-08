@@ -22,6 +22,7 @@ FLAGS = tf.app.flags.FLAGS
 
 
 def main(_):
+  os.environ['CUDA_VISIBLE_DEVICES'] = '1'
   if not os.path.isdir('./output/mask_rcnn'):
     os.makedirs('./output/mask_rcnn')
   if not FLAGS.dataset_name:

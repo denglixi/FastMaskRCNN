@@ -34,6 +34,49 @@ from libs.visualization.pil_utils import cat_id_to_cls_name, draw_img, draw_bbox
 
 FLAGS = tf.app.flags.FLAGS
 #resnet50 = resnet_v1.resnet_v1_50
+def average_gradients(tower_grads):
+  """Calculate the average gradient for each shared variable across all towers.
+  Note that this function provides a synchronization point across all towers.
+  Args:
+    tower_grads: List of lists of (gradient, variable) tuples. The outer list
+      is over individual gradients. The inner list is over the gradient
+      calculation for each tower.
+  Returns:
+     List of pairs of (gradient, variable) where the gradient has been averaged
+     across all towers.
+  """
+  average_grads = []
+  for grad_and_vars in zip(*tower_grads):
+    # Note that each grad_and_vars looks like the following:
+    #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+    grads = []
+    for g, _ in grad_and_vars:
+      # Add 0 dimension to the gradients to represent the tower.
+      expanded_g = tf.expand_dims(g, 0)
+
+      # Append on a 'tower' dimension which we will average over below.
+      grads.append(expanded_g)
+
+    # Average over the 'tower' dimension.
+    grad = tf.concat(axis=0, values=grads)
+    grad = tf.reduce_mean(grad, 0)
+
+    # Keep in mind that the Variables are redundant because they are shared
+    # across towers. So .. we will just return the first tower's pointer to
+    # the Variable.
+    v = grad_and_vars[0][1]
+    grad_and_var = (grad, v)
+    average_grads.append(grad_and_var)
+  return average_grads
+
+def get_opt(global_step):
+    '''get optimizer'''
+    # learning reate
+    lr = _configure_learning_rate(82783, global_step)
+    optimizer = _configure_optimizer(lr)
+    tf.summary.scalar('learning_rate', lr)
+    return optimizer
+
 
 def solve(global_step):
     """add solver to losses"""
@@ -54,22 +97,6 @@ def solve(global_step):
     tf.summary.scalar('loss', loss)
     tf.summary.scalar('regular_loss', regular_loss)
 
-    # update_ops = []
-    # variables_to_train = _get_variables_to_train()
-    # update_op = optimizer.minimize(total_loss)
-
-    # gradients = optimizer.compute_gradients(total_loss, var_list=variables_to_train)
-    # grad_updates = optimizer.apply_gradients(gradients, 
-    #         global_step=global_step)
-    # update_ops.append(grad_updates)
-
-    ## update moving mean and variance
-    # if FLAGS.update_bn:
-    #     update_bns = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    #     update_bn = tf.group(*update_bns)
-    #     # update_ops.append(update_bn)
-    #     total_loss = control_flow_ops.with_dependencies([update_bn], total_loss)
-    # train_op  = slim.learning.create_train_op(total_loss, optimizer)
 
     if FLAGS.update_bn:
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -208,50 +235,74 @@ def train():
 
     im_shape = tf.shape(image)
     image = tf.reshape(image, (im_shape[0], im_shape[1], im_shape[2], 3))
+    ## solvers
+    with tf.device('cpu:0'):
+        global_step = slim.create_global_step()
+        opt = get_opt(global_step)
+
 
     ## network
-    logits, end_points, pyramid_map = network.get_network(FLAGS.network, image,
-            weight_decay=FLAGS.weight_decay, batch_norm_decay=FLAGS.batch_norm_decay, is_training=True)
-    outputs = pyramid_network.build(end_points, image_height, image_width, pyramid_map,
-            num_classes=81,
-            base_anchors=9,#15
-            is_training=True,
-            gt_boxes=gt_boxes, gt_masks=gt_masks,
-            loss_weights=[1.0, 1.0, 1.0, 10.0, 1.0])
-            # loss_weights=[10.0, 1.0, 0.0, 0.0, 0.0])
-            # loss_weights=[100.0, 100.0, 1000.0, 10.0, 100.0])
-            # loss_weights=[0.2, 0.2, 1.0, 0.2, 1.0])
-            # loss_weights=[0.1, 0.01, 10.0, 0.1, 1.0])
+    gpu_ids = [0]
+    tower_grads = []
+    with tf.variable_scope(tf.get_variable_scope()):
+        for gpu_id in gpu_ids:
+            with tf.device('/gpu:%d' % gpu_id):
+                with tf.name_scope("%s_%d" % ("MaskRCNN_Tower", gpu_id)) as scope:
+                    logits, end_points, pyramid_map = network.get_network(FLAGS.network, image,
+                            weight_decay=FLAGS.weight_decay, batch_norm_decay=FLAGS.batch_norm_decay, is_training=True)
+                    outputs = pyramid_network.build(end_points, image_height, image_width, pyramid_map,
+                            num_classes=81,
+                            base_anchors=9,#15
+                            is_training=True,
+                            gt_boxes=gt_boxes, gt_masks=gt_masks,
+                            loss_weights=[1.0, 1.0, 1.0, 10.0, 1.0])
 
-    total_loss = outputs['total_loss']
-    losses  = outputs['losses']
-    batch_info = outputs['batch_info']
-    regular_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-    input_image = end_points['input']
+                    total_loss = outputs['total_loss']
+                    losses  = outputs['losses']
+                    batch_info = outputs['batch_info']
+                    regular_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+                    input_image = end_points['input']
 
-    training_rcnn_rois                  = outputs['training_rcnn_rois']
-    training_rcnn_clses                 = outputs['training_rcnn_clses']
-    training_rcnn_clses_target          = outputs['training_rcnn_clses_target'] 
-    training_rcnn_scores                = outputs['training_rcnn_scores']
-    training_mask_rois                  = outputs['training_mask_rois']
-    training_mask_clses_target          = outputs['training_mask_clses_target']
-    training_mask_final_mask            = outputs['training_mask_final_mask']
-    training_mask_final_mask_target     = outputs['training_mask_final_mask_target']
-    tmp_0 = outputs['rpn']['P2']['shape']
-    tmp_1 = outputs['rpn']['P3']['shape']
-    tmp_2 = outputs['rpn']['P4']['shape']
-    tmp_3 = outputs['rpn']['P5']['shape']
+                    training_rcnn_rois                  = outputs['training_rcnn_rois']
+                    training_rcnn_clses                 = outputs['training_rcnn_clses']
+                    training_rcnn_clses_target          = outputs['training_rcnn_clses_target'] 
+                    training_rcnn_scores                = outputs['training_rcnn_scores']
+                    training_mask_rois                  = outputs['training_mask_rois']
+                    training_mask_clses_target          = outputs['training_mask_clses_target']
+                    training_mask_final_mask            = outputs['training_mask_final_mask']
+                    training_mask_final_mask_target     = outputs['training_mask_final_mask_target']
+                    tmp_0 = outputs['rpn']['P2']['shape']
+                    tmp_1 = outputs['rpn']['P3']['shape']
+                    tmp_2 = outputs['rpn']['P4']['shape']
+                    tmp_3 = outputs['rpn']['P5']['shape']
 
-    ## solvers
-    global_step = slim.create_global_step()
-    update_op = solve(global_step)
+                    tf.get_variable_scope().reuse_variables()
+
+                    grads = opt.compute_gradients(total_loss)
+                    tower_grads.append(grads)
+
+    grads = average_gradients(tower_grads)
+    if FLAGS.update_bn:
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            train_op = opt.apply_gradients(grads,global_step=global_step)
+            
+    else:
+        train_op = opt.apply_gradients(grads,global_step=global_step)
 
     cropped_rois = tf.get_collection('__CROPPED__')[0]
     transposed = tf.get_collection('__TRANSPOSED__')[0]
     
     #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
     gpu_options = tf.GPUOptions(allow_growth=True)
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))#,intra_op_parallelism_threads=1,inter_op_parallelism_threads=1))
+
+
+    cropped_rois = tf.get_collection('__CROPPED__')[0]
+    transposed = tf.get_collection('__TRANSPOSED__')[0]
+    
+    #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
+    gpu_options = tf.GPUOptions(allow_growth=True)
+    sess = tf.Session(config=tf.ConfigProto(log_device_placement=False,allow_soft_placement=True,gpu_options=gpu_options))#,intra_op_parallelism_threads=1,inter_op_parallelism_threads=1))
     #sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
     init_op = tf.group(
             tf.global_variables_initializer(),
@@ -295,7 +346,7 @@ def train():
         rpn_batch_pos, rpn_batch, rcnn_batch_pos, rcnn_batch, mask_batch_pos, mask_batch, \
         input_imagenp, \
         training_rcnn_roisnp, training_rcnn_clsesnp, training_rcnn_clses_targetnp, training_rcnn_scoresnp, training_mask_roisnp, training_mask_clses_targetnp, training_mask_final_masknp, training_mask_final_mask_targetnp  = \
-                     sess.run([update_op, total_loss, regular_loss, image_id] + 
+                     sess.run([train_op, total_loss, regular_loss, image_id] + 
                               losses + 
                               [gt_boxes] + [tmp_0] + [tmp_1] + [tmp_2] +[tmp_3] +
                               batch_info + 
@@ -371,5 +422,5 @@ def train():
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    #os.environ['CUDA_VISIBLE_DEVICES'] = '0,2,4'
     train()

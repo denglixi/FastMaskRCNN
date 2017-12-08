@@ -227,8 +227,8 @@ def resnet_arg_scope(weight_decay=0.0001,
 
   with arg_scope(
       [layers_lib.conv2d],
-      weights_regularizer=regularizers.l2_regularizer(weight_decay),
-      weights_initializer=initializers.variance_scaling_initializer(),
+      #weights_regularizer=regularizers.l2_regularizer(weight_decay),
+      #weights_initializer=initializers.variance_scaling_initializer(),
       activation_fn=nn_ops.relu,
       normalizer_fn=layers.batch_norm,
       normalizer_params=batch_norm_params):

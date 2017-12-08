@@ -160,29 +160,30 @@ def assign_boxes(gt_boxes, tensors, layers, scope='AssignGTBoxes'):
     assign tensor in tensors(a iterable type) with size of gt_boxes following the formulation that k = [k0 + log_2(sqrt(area)/224)] that 224 is the standard input of imagenet
     gt_boxes is same size with tensor in tensors. In fact ,they sametime should be same thing
     '''
-    with tf.name_scope(scope) as sc:
-        min_k = layers[0]
-        max_k = layers[-1]
-        #index of gt to layers
-        assigned_layers = \
-            tf.py_func(assign.assign_boxes, 
-                     [ gt_boxes, min_k, max_k ],
-                     tf.int32)
-        assigned_layers = tf.reshape(assigned_layers, [-1])
+    with tf.device('cpu:0'):
+        with tf.name_scope(scope) as sc:
+            min_k = layers[0]
+            max_k = layers[-1]
+            #index of gt to layers
+            assigned_layers = \
+                tf.py_func(assign.assign_boxes, 
+                         [ gt_boxes, min_k, max_k ],
+                         tf.int32)
+            assigned_layers = tf.reshape(assigned_layers, [-1])
 
-        #base assigned_layers to assign tensors
-        
-        assigned_tensors = []
-        for t in tensors:
-            split_tensors = []
-            for l in layers:
-                tf.cast(l, tf.int32)
-                inds = tf.where(tf.equal(assigned_layers, l))
-                inds = tf.reshape(inds, [-1])
-                split_tensors.append(tf.gather(t, inds))
-            assigned_tensors.append(split_tensors)
+            #base assigned_layers to assign tensors
+            
+            assigned_tensors = []
+            for t in tensors:
+                split_tensors = []
+                for l in layers:
+                    tf.cast(l, tf.int32)
+                    inds = tf.where(tf.equal(assigned_layers, l))
+                    inds = tf.reshape(inds, [-1])
+                    split_tensors.append(tf.gather(t, inds))
+                assigned_tensors.append(split_tensors)
 
-        return assigned_tensors + [assigned_layers]
+            return assigned_tensors + [assigned_layers]
 
 def sample_rcnn_outputs_wrapper(final_boxes, classes, cls2_prob, class_agnostic=False, scope='instInference'):
     with tf.name_scope(scope) as sc:
